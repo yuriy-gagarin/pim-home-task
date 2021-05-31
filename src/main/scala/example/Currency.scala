@@ -2,56 +2,67 @@ package example
 
 import java.math.{MathContext, RoundingMode}
 
-sealed abstract class CurrencyType extends Product with Serializable
+sealed abstract class Currency extends Product with Serializable
 
-object CurrencyType {
-  abstract class USD extends CurrencyType
-  abstract class EUR extends CurrencyType
-  abstract class RUB extends CurrencyType
+object Currency {
+  case object USD extends Currency
+  case object EUR extends Currency
+  case object RUB extends Currency
 }
 
-sealed abstract class Currency[T <: CurrencyType] extends Product with Serializable {
-  import Currency._
-  def +(r: Currency[T]): Currency[T] = CurrencyAdd(this, r)
-  def -(r: Currency[T]): Currency[T] = CurrencySub(this, r)
-  def *(r: Currency[T]): Currency[T] = CurrencyMul(this, r)
-  def /(r: Currency[T]): Currency[T] = CurrencyDiv(this, r)
+object implicits {
+  import Money._
+
+  implicit class BigDecimalOps(val value: BigDecimal) extends AnyVal {
+    def apply[T <: Currency](t: T): Money[T] = MoneyValue[T](value)
+  }
+
+  implicit class IntOps(val value: Int) extends AnyVal {
+    def apply[T <: Currency](t: T): Money[T] = BigDecimal(value).apply(t)
+  }
+}
+
+sealed abstract class Money[T <: Currency] {
+  import Money._
+  def +(right: Money[T]): Money[T] = MoneyAdd(this, right)
+  def -(right: Money[T]): Money[T] = MoneySub(this, right)
+  def *(right: BigDecimal): Money[T] = MoneyMul(this, right)
+  def /(right: BigDecimal): Money[T] = MoneyMul(this, right)
 
   def eval: BigDecimal = this match {
-    case CurrencyValue(amount) => amount
-    case CurrencyAdd(l, r) => l.eval + r.eval
-    case CurrencySub(l, r) => l.eval - r.eval
-    case CurrencyMul(l, r) => l.eval * r.eval
-    case CurrencyDiv(l, r) => (l.eval / r.eval).round(mc)
+    case MoneyValue(amount) => amount
+    case MoneyAdd(left, right) => left.eval + right.eval
+    case MoneySub(left, right) => left.eval - right.eval
+    case MoneyMul(left, right) => left.eval * right
+    case MoneyDiv(left, right) => left.eval / right
   }
 
   def print: String = this match {
-    case CurrencyValue(amount) => amount.toString
-    case CurrencyAdd(l, r) => "(" + l.print + " + " + r.print + ")"
-    case CurrencySub(l, r) => "(" + l.print + " - " + r.print + ")"
-    case CurrencyMul(l, r) => "(" + l.print + " * " + r.print + ")"
-    case CurrencyDiv(l, r) => "(" + l.print + " / " + r.print + ")"
+    case MoneyValue(amount) => amount.toString
+    case MoneyAdd(l, r) => "(" + l.print + " + " + r.print + ")"
+    case MoneySub(l, r) => "(" + l.print + " - " + r.print + ")"
+    case MoneyMul(l, r) => "(" + l.print + " * " + r.toString + ")"
+    case MoneyDiv(l, r) => "(" + l.print + " / " + r.toString + ")"
   }
 }
 
-object Currency {
-  case class CurrencyValue[T <: CurrencyType](amount: BigDecimal) extends Currency[T]
-  case class CurrencyAdd[T <: CurrencyType](l: Currency[T], r: Currency[T]) extends Currency[T]
-  case class CurrencySub[T <: CurrencyType](l: Currency[T], r: Currency[T]) extends Currency[T]
-  case class CurrencyMul[T <: CurrencyType](l: Currency[T], r: Currency[T]) extends Currency[T]
-  case class CurrencyDiv[T <: CurrencyType](l: Currency[T], r: Currency[T]) extends Currency[T]
+object Money {
+  case class MoneyValue[T <: Currency](amount: BigDecimal) extends Money[T]
+  case class MoneyAdd[T <: Currency](left: Money[T], right: Money[T]) extends Money[T]
+  case class MoneySub[T <: Currency](left: Money[T], right: Money[T]) extends Money[T]
+  case class MoneyMul[T <: Currency](left: Money[T], right: BigDecimal) extends Money[T]
+  case class MoneyDiv[T <: Currency](left: Money[T], right: BigDecimal) extends Money[T]
 
   val mc = new MathContext(3, RoundingMode.HALF_EVEN)
 }
 
 object Main extends App {
   import Currency._
-  import CurrencyType._
-  val expr1: Currency[USD] = CurrencyValue(2) + CurrencyValue(2)
-  val expr2: Currency[USD] = expr1 * CurrencyValue(4)
-  val expr: Currency[USD] = expr2 / CurrencyValue(3)
+  import implicits._
 
-  println(expr)
-  println(expr.eval)
-  println(expr.print)
+  val money1 = 40(USD) + 40(USD) * 2
+
+  println(money1)
+  println(money1.eval)
+  println(money1.print)
 }
